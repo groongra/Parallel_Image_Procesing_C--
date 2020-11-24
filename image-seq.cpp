@@ -4,6 +4,7 @@
 #include <iostream>
 #include <dirent.h>
 #include <sstream>
+#include "utilities/bmp.h"
 
 #define COPY "copy"
 #define GAUSS "gauss"
@@ -45,10 +46,15 @@ int main(int argc, char **argv){
     }
     while ((ent = readdir (dir_in)) != NULL) {
         std::string s= ent->d_name;
-        std::cout << s << std::endl;
+        char* extension = strchr(ent->d_name, '.');
+
+        if(extension && (strcmp(extension, ".bmp")==0))   std::cout << s << std::endl;
+      
     }
     closedir (dir_in); 
     closedir (dir_out); 
+
+    
 
     exit(0);
 }
