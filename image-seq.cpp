@@ -44,7 +44,6 @@ typedef struct bmpInfoHeader
 
 unsigned char *LoadBMP(FILE *f, bmpInfoHeader *bInfoHeader, bmpFileHeader *bFileHeader)
 {
-    unsigned char *imgdata; /* Img data */
     if (f == NULL)
     {
         fclose(f);
@@ -53,29 +52,39 @@ unsigned char *LoadBMP(FILE *f, bmpInfoHeader *bInfoHeader, bmpFileHeader *bFile
 
     fread(bFileHeader, BMP_FILE_HEADER, 1, f); //Read file's header
 
+    /*fseek(f, 0, SEEK_SET);
+    fread(&bFileHeader->type, sizeof(uint16_t), 1, f); // Read image data, in other words, imgsize bytes
+    std::cout << "type " << bFileHeader->type << "\n";
+
+    fseek(f, 2, SEEK_SET);
+    fread(&bFileHeader->size, sizeof(uint32_t), 1, f); // Read image data, in other words, imgsize bytes
+    std::cout << "size " << bFileHeader->size << "\n";
+
+    fseek(f, 6, SEEK_SET);
+    fread(&bFileHeader->resv, sizeof(uint32_t), 1, f); // Read image data, in other words, imgsize bytes
+    std::cout << "resv " << bFileHeader->resv << "\n";
+
+    fseek(f, 10, SEEK_SET);
+    fread(&bFileHeader->offset, sizeof(int), 1, f); // Read image data, in other words, imgsize bytes
+    std::cout << "OFFSET " << bFileHeader->offset << "\n";
+    */
     if (bFileHeader->type != 0x4D42) /* Check correct format */
     {
         fclose(f);
         return NULL;
     }
+    fseek(f, BMP_FILE_HEADER, SEEK_SET);
     fread(bInfoHeader, BMP_INFO_HEADER, 1, f); //Read bmp's header
 
+    unsigned char *imgdata;                                  /* Img data */
     imgdata = (unsigned char *)malloc(bInfoHeader->imgsize); //Allocate memory (imgsize)
 
-    //fseek(f, bFileHeader->offset, SEEK_SET); //Set filedescriptor to the beginning of the image data (bmp file header offset)
+    fseek(f, BMP_FILE_HEADER + BMP_INFO_HEADER, SEEK_SET);
 
-    /*while (!feof(f)){
-     fread(imgdata, 1, 1, f);
-  }*/
-    int offset = 0;
-
-    fseek(f, 10, SEEK_SET);
-    fread(&offset, sizeof(int), 1, f); // Read image data, in other words, imgsize bytes*/
-    std::cout << "OFFSET " << offset << "\n";
-    fseek(f, 54, 0);
+    //fseek(f, 54+bFileHeader->offset, SEEK_SET); //Set filedescriptor to the beginning of the image data (bmp file header offset)
     fread(imgdata, bInfoHeader->imgsize, 1, f); // Read image data, in other words, imgsize bytes*/
 
-    std::cout << "suma:" << BMP_INFO_HEADER + BMP_FILE_HEADER + bInfoHeader->imgsize;
+    //std::cout << "suma:" << BMP_INFO_HEADER + BMP_FILE_HEADER + bInfoHeader->imgsize <<"\n";
     fclose(f);
     return imgdata;
 }
@@ -111,7 +120,6 @@ int fcopy(bmpFileHeader *bmpFile, bmpInfoHeader *bmpInfo, const void *bmp_img, s
     FILE *fdDest = fopen(copyPath, "w");
     if (fdDest != NULL)
     {
-
         if (fwrite(bmpFile, BMP_FILE_HEADER, 1, fdDest) != 1)
             return -1;
         if (fwrite(bmpInfo, BMP_INFO_HEADER, 1, fdDest) != 1)
@@ -119,12 +127,22 @@ int fcopy(bmpFileHeader *bmpFile, bmpInfoHeader *bmpInfo, const void *bmp_img, s
         if (fwrite(bmp_img, imgSize, 1, fdDest) != 1)
             return -1;
     }
-    std::cout << "siee";
     return 0;
 }
 
-int fgauss()
+char* arrangePath(char* destination_path, char *destination_name)
 {
+    unsigned int copyPathSize = strlen(destination_path) + strlen("/") + strlen(destination_name);
+    char* path = (char *)malloc(copyPathSize * sizeof(char));
+    strcpy(path, destination_path);
+    if (path[(strlen(path) - 1)] != '/')   strcat(path, "/");
+    strcat(path, destination_name);
+    return path;
+}
+
+int fgauss(unsigned char* img)
+{
+    if(img==NULL) return -1;
     return (0);
 }
 
@@ -150,7 +168,7 @@ void displayBMPInfo(bmpInfoHeader *info)
 
 void displayBMPFile(bmpFileHeader *info)
 {
-    printf("\t| type %c\n", info->type);
+    printf("\t| type: %u\n", info->type);
     printf("\t| size: %i\n", info->size);
     printf("\t| reserved: %d\n", info->resv);
     printf("\t| offset: %i\n", info->offset);
@@ -202,10 +220,7 @@ int main(int argc, char **argv)
     DIR *dir_in, *dir_out;
     struct dirent *ent_dir_in;
     struct stat statbuff;
-    char *copyPath;
-    char *copyPath2;
-    char *extension;
-    unsigned int copyPathSize;
+    char *dest_path, *source_path, *extension;
 
     if ((dir_in = opendir(argv[2])) == NULL) /* could not open input directory */
     {
@@ -226,60 +241,53 @@ int main(int argc, char **argv)
             if (extension && (strcmp(extension, ".bmp") == 0)) //Check BMP extension
             {
 
-                std::cout << bmp_file << std::endl;
+                std::cout << "\n"
+                          << bmp_file << std::endl;
+
                 unsigned char *bmp_img;
                 bmpFileHeader bmp_file_header;
                 bmpInfoHeader bmp_img_info;
 
-                copyPath2 = (char *)malloc(copyPathSize * sizeof(char));
-                strcpy(copyPath2, argv[2]);
-                strcat(copyPath2, "/");
-                strcat(copyPath2, ent_dir_in->d_name);
+                source_path = arrangePath(argv[2], ent_dir_in->d_name);
 
-                FILE *source = fopen(copyPath2, "r"); //Open source file
+                FILE *source = fopen(source_path, "r"); //Open source file
 
                 bmp_img = LoadBMP(source, &bmp_img_info, &bmp_file_header); //Obtain BMP header and file structure
 
-                if (bmp_img == NULL)
-                    std::cout << ("> Can't open [" + bmp_file + "]\n"); //NO access
-
+                if (bmp_img == NULL) std::cout << ("> Can't open [" + bmp_file + "]\n"); //NO access
+          
                 if (checkBMP(&bmp_img_info))
-                { //Apply tranformation
+                { 
+                    
                     displayBMPFile(&bmp_file_header);
-                    std::cout << "\n";
                     displayBMPInfo(&bmp_img_info);
 
-                    if (copy)
+                    //Apply tranformation if present
+                    if (gauss)
                     {
-                        //Copy
-                        copyPathSize = strlen(argv[3]) + strlen("/") + strlen(ent_dir_in->d_name);
-                        copyPath = (char *)malloc(copyPathSize * sizeof(char));
-                        strcpy(copyPath, argv[3]);
-                        strcat(copyPath, "/");
-                        strcat(copyPath, ent_dir_in->d_name);
-
-                        std::cout << "Copying " << ent_dir_in->d_name << " in " << copyPath << "\n";
-
-                        if (fcopy(&bmp_file_header, &bmp_img_info, bmp_img, bmp_img_info.imgsize, copyPath) < 0)
-                            std::cout << "Failed do copy " << ent_dir_in->d_name << " in " << copyPath << "\n";
-                    }
-                    else if (gauss)
-                    {
-                        fgauss();
+                        fgauss(bmp_img);
                     }
                     else if (sobel)
                     {
                         fsobel();
                     }
-                    free(bmp_img);
-                    free(copyPath2);
-                    free(copyPath);
-                }
 
-                //close(source);
+                    //Copy file
+                    dest_path = arrangePath(argv[3], ent_dir_in->d_name);
+                    std::cout << "Copying " << dest_path << "\n";
+
+                    if (fcopy(&bmp_file_header, &bmp_img_info, bmp_img, bmp_img_info.imgsize, dest_path) < 0)
+                        std::cout << "Failed do copy " << ent_dir_in->d_name << " in " << dest_path << "\n";
+
+                    free(bmp_img);
+                    free(source_path);
+                    free(dest_path);
+                }
+                //fclose(source);
             }
         }
     }
+    
     closedir(dir_in);
     closedir(dir_out);
     exit(0);
