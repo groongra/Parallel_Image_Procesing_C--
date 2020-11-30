@@ -26,6 +26,7 @@ typedef struct timeMetrics
     std::chrono::duration<float, std::milli> readingTime;
     std::chrono::duration<float, std::milli> operationTime;
     std::chrono::duration<float, std::milli> writeTime;
+    std::chrono::duration<float, std::milli> totalTime = readingTime + operationTime + writeTime;
 
 } timeMetrics;
 
@@ -82,6 +83,7 @@ char *arrangePath(char *destination_path, char *destination_name);
 void displayBMP(bmp *bmp);
 void displayBMPInfo(bmpInfoHeader *info);
 void displayBMPFile(bmpFileHeader *info);
+void displayTime(timeMetrics time, char *operation);
 void runtimeError(int errorCode, std::string elem);
 int checkBMPHeader(bmpInfoHeader *bInfoHeader);
 void readBMP(FILE *f, bmp *bmp);
@@ -119,6 +121,9 @@ int main(int argc, char **argv)
     {
         runtimeError(-5, argv[3]);
     }
+    std::cout << "Input path: "<< argv[2] <<"\n";
+    std::cout << "Output path: "<< argv[3] <<"\n";
+
     while ((ent_dir_in = readdir(dir_in)) != NULL)
     {
         if (!S_ISDIR(statbuff.st_mode)) //Check it is a Dir file
@@ -138,18 +143,16 @@ int main(int argc, char **argv)
                 source_path = arrangePath(argv[2], ent_dir_in->d_name);
 
                 FILE *source = fopen(source_path, "r"); //Open source file
-                if (DEBUG)
-                    std::cout << "Reading " << source_path << "\n";
 
                 auto startTime = std::chrono::high_resolution_clock::now();
                 readBMP(source, &bmp); //Obtain BMP header and file structure
                 auto endTime = std::chrono::high_resolution_clock::now();
-                time.readingTime = startTime - endTime;
+                time.readingTime = endTime - startTime;
 
                 if (bmp.image == NULL)
                     if (DEBUG)
                         std::cout
-                            << "> Can't open [" << source_path << "]\n"; //NO access
+                            << "> Can't open \"" << source_path << "\"\n"; //NO access
 
                 if (checkBMPHeader(&bmp.infoHeader))
                 {
@@ -158,12 +161,10 @@ int main(int argc, char **argv)
                         displayBMP(&bmp);
 
                     //Apply tranformation if present
-                    unsigned char *result; 
+                    unsigned char *result;
                     if (copy)
                     {
-                        startTime = std::chrono::high_resolution_clock::now();
-                        endTime = std::chrono::high_resolution_clock::now();
-                        result=bmp.image;
+                        result = bmp.image;
                     }
                     else
                     {
@@ -175,7 +176,7 @@ int main(int argc, char **argv)
                         if (gauss)
                         {
                             startTime = std::chrono::high_resolution_clock::now();
-                            fgauss(&bmp,result);
+                            fgauss(&bmp, result);
                             endTime = std::chrono::high_resolution_clock::now();
                         }
                         else //sobel
@@ -184,19 +185,24 @@ int main(int argc, char **argv)
                             fsobel(&bmp);
                             endTime = std::chrono::high_resolution_clock::now();
                         }
+                        time.operationTime = endTime - startTime;
                     }
-                    time.operationTime = startTime - endTime;
-                    bmp.image=result;
+                    bmp.image = result;
                     //Copy file
                     dest_path = arrangePath(argv[3], ent_dir_in->d_name);
                     if (DEBUG)
                         std::cout << "Copying " << dest_path << "\n";
-
-                    if (writeBMP(&bmp ,dest_path) < 0)
+                    startTime = std::chrono::high_resolution_clock::now();
+                    if (writeBMP(&bmp, dest_path) < 0)
 
                         if (DEBUG)
                             std::cout << "Failed to copy " << ent_dir_in->d_name << " in " << dest_path << "\n";
+                    endTime = std::chrono::high_resolution_clock::now();
+                    time.writeTime = endTime - startTime;
 
+                    std::cout << "File:  \"" << source_path << "\"(time:" << time.totalTime.count()<<")\n";
+                    
+                    displayTime(time,argv[1]);
                     free(bmp.image);
                     free(source_path);
                     free(dest_path);
@@ -350,28 +356,22 @@ char *arrangePath(char *destination_path, char *destination_name)
     return path;
 }
 
-int kernel[3][3] = {1, 2, 1,
-                    2, 4, 2,
-                    1, 2, 1};
-
 int accessPixel(unsigned char *arr, int col, int row, int k, int width, int height)
 {
     int sum = 0;
-    int sumKernel = 0;
 
-    for (int j = -1; j <= 1; j++)
+    for (int j = -2; j <= 2; j++)
     {
-        for (int i = -1; i <= 1; i++)
+        for (int i = -2; i <= 2; i++)
         {
             if ((row + j) >= 0 && (row + j) < height && (col + i) >= 0 && (col + i) < width)
             {
                 int color = arr[(row + j) * 3 * width + (col + i) * 3 + k];
-                sum += color * kernel[i + 1][j + 1];
-                sumKernel += kernel[i + 1][j + 1];
+                sum += color * gauss[i + 2][j + 2];
             }
         }
     }
-    return sum / sumKernel;
+    return sum / gaussWeight;
 }
 
 void guassian_blur2D(unsigned char *arr, unsigned char *result, int width, int height)
@@ -448,6 +448,14 @@ void displayBMPFile(bmpFileHeader *info)
     printf("\t| size: %i\n", info->size);
     printf("\t| reserved: %d\n", info->resv);
     printf("\t| offset: %i\n", info->offset);
+}
+
+void displayTime(timeMetrics time, char *operation)
+{
+    std::cout << "\tLoad time: " << time.readingTime.count() <<"\n";
+    if (strcmp(operation, COPY) != 0)
+        std::cout << "\t" << operation << " time: " << time.operationTime.count() <<"\n";
+    std::cout << "\tStore time: " << time.writeTime.count()<<"\n";
 }
 
 void runtimeError(int errorCode, std::string elem)
