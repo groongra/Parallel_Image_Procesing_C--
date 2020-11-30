@@ -2,8 +2,8 @@
 #Clean directory: make clean
 
 CC=g++
-#CFLAGS=-std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors
-CFLAGS=-std=c++17
+CFLAGS=-std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors
+#CFLAGS=-std=c++17
 BINDIR=bin
 PROGS=\
 $(BINDIR)/image-seq \

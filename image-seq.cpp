@@ -20,13 +20,14 @@
 #define PLANES 1
 #define BMP_FILE_HEADER 14 /* headerSize*/
 #define BMP_INFO_HEADER 40 /* headerSize*/
+#define TIME_UNIT std::chrono::duration<float, std::micro>
 
 typedef struct timeMetrics
 {
-    std::chrono::duration<float, std::milli> readingTime;
-    std::chrono::duration<float, std::milli> operationTime;
-    std::chrono::duration<float, std::milli> writeTime;
-    std::chrono::duration<float, std::milli> totalTime = readingTime + operationTime + writeTime;
+    TIME_UNIT readingTime;
+    TIME_UNIT operationTime;
+    TIME_UNIT writeTime;
+    TIME_UNIT totalTime = readingTime + operationTime + writeTime;
 
 } timeMetrics;
 
@@ -89,7 +90,7 @@ int checkBMPHeader(bmpInfoHeader *bInfoHeader);
 void readBMP(FILE *f, bmp *bmp);
 int writeBMP(bmp *bmp, char *copyPath);
 int fgauss(bmp *bmp, unsigned char *result);
-int fsobel(bmp *bmp);
+int fsobel(bmp *bmp, unsigned char *result);
 
 ////////////////////MAIN////////////////////
 
@@ -165,6 +166,7 @@ int main(int argc, char **argv)
                     if (copy)
                     {
                         result = bmp.image;
+                        time.operationTime = TIME_UNIT::zero();
                     }
                     else
                     {
@@ -182,7 +184,7 @@ int main(int argc, char **argv)
                         else //sobel
                         {
                             startTime = std::chrono::high_resolution_clock::now();
-                            fsobel(&bmp);
+                            fsobel(&bmp,  result);
                             endTime = std::chrono::high_resolution_clock::now();
                         }
                         time.operationTime = endTime - startTime;
@@ -200,7 +202,7 @@ int main(int argc, char **argv)
                     endTime = std::chrono::high_resolution_clock::now();
                     time.writeTime = endTime - startTime;
 
-                    std::cout << "File:  \"" << source_path << "\"(time:" << time.totalTime.count()<<")\n";
+                    std::cout << "File:  \"" << source_path << "\"(time: " << time.totalTime.count()<<")\n";
                     
                     displayTime(time,argv[1]);
                     free(bmp.image);
@@ -222,7 +224,7 @@ void readBMP(FILE *f, bmp *bmp)
     if (f == NULL)
     {
         fclose(f);
-        bmp->image == NULL;
+        bmp->image = NULL;
     }
     //fread(bFileHeader, BMP_FILE_HEADER, 1, f); //Read file's header
 
@@ -245,7 +247,7 @@ void readBMP(FILE *f, bmp *bmp)
     if (bmp->fileHeader.type != 0x4D42) /* Check correct format */
     {
         fclose(f);
-        bmp->image == NULL;
+        bmp->image = NULL;
     }
     //fseek(f, BMP_FILE_HEADER, SEEK_SET);
     fread(&bmp->infoHeader, BMP_INFO_HEADER, 1, f); //Read bmp's header
@@ -267,7 +269,7 @@ void readBMP(FILE *f, bmp *bmp)
 
     bmp->image = (unsigned char *)malloc(totalSize);
     unsigned char *currentRowPointer = bmp->image + ((bmp->infoHeader.height - 1) * unpaddedRowSize);
-    for (int i = 0; i < bmp->infoHeader.height; i++)
+    for (uint32_t i = 0; i < bmp->infoHeader.height; i++)
     {
         fseek(f, bmp->fileHeader.offset + (i * paddedRowSize), SEEK_SET);
         fread(currentRowPointer, 1, unpaddedRowSize, f);
@@ -333,9 +335,8 @@ int writeBMP(bmp *bmp, char *copyPath)
         int paddedRowSize = unpaddedRowSize + padding;
         if (DEBUG)
             std::cout << "\t| (padded|unpadded) ::" << paddedRowSize << " | " << unpaddedRowSize << "-> padding:" << padding << "\n";
-        int totalSize = unpaddedRowSize * (bmp->infoHeader.height);
 
-        for (int i = 0; i < bmp->infoHeader.height; i++)
+        for (uint32_t i = 0; i < bmp->infoHeader.height; i++)
         {
             int pixelOffset = ((bmp->infoHeader.height - i) - 1) * unpaddedRowSize;
             fwrite(&bmp->image[pixelOffset], 1, paddedRowSize, fdDest);
@@ -356,7 +357,7 @@ char *arrangePath(char *destination_path, char *destination_name)
     return path;
 }
 
-int accessPixel(unsigned char *arr, int col, int row, int k, int width, int height)
+int accessPixel(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
 {
     int sum = 0;
 
@@ -364,9 +365,9 @@ int accessPixel(unsigned char *arr, int col, int row, int k, int width, int heig
     {
         for (int i = -2; i <= 2; i++)
         {
-            if ((row + j) >= 0 && (row + j) < height && (col + i) >= 0 && (col + i) < width)
+            if ((row + j) >= 0 && (row + j) < (int)height && (col + i) >= 0 && (col + i) < (int)width)
             {
-                int color = arr[(row + j) * 3 * width + (col + i) * 3 + k];
+                uint32_t color = arr[(row + j) * 3 * (int)width + (col + i) * 3 + k];
                 sum += color * gauss[i + 2][j + 2];
             }
         }
@@ -374,13 +375,13 @@ int accessPixel(unsigned char *arr, int col, int row, int k, int width, int heig
     return sum / gaussWeight;
 }
 
-void guassian_blur2D(unsigned char *arr, unsigned char *result, int width, int height)
+void guassian_blur2D(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height)
 {
-    for (int row = 0; row < height; row++)
+    for (uint32_t row = 0; row < height; row++)
     {
-        for (int col = 0; col < width; col++)
+        for (uint32_t col = 0; col < width; col++)
         {
-            for (int k = 0; k < 3; k++)
+            for (uint32_t k = 0; k < 3; k++)
             {
                 result[3 * row * width + 3 * col + k] = accessPixel(arr, col, row, k, width, height);
             }
@@ -416,8 +417,9 @@ int fgauss(bmp *bmp, unsigned char *result)
     return 0;
 }
 
-int fsobel(bmp *bmp)
+int fsobel(bmp *bmp, unsigned char *result)
 {
+    guassian_blur2D(bmp->image, result, bmp->infoHeader.width, bmp->infoHeader.height);
     return 0;
 }
 
