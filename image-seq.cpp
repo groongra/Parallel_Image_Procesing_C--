@@ -77,7 +77,7 @@ int sobelX[3][3]{
 int sobelY[3][3]{
     {-1, 0, 1},
     {-2, 0, 2},
-    {-1, -0, -1}};
+    {-1, 0, 1}};
 int sobelWeight = 8;
 
 char *arrangePath(char *destination_path, char *destination_name);
@@ -89,8 +89,9 @@ void runtimeError(int errorCode, std::string elem);
 int checkBMPHeader(bmpInfoHeader *bInfoHeader);
 void readBMP(FILE *f, bmp *bmp);
 int writeBMP(bmp *bmp, char *copyPath);
-int fgauss(bmp *bmp, unsigned char *result);
-int fsobel(bmp *bmp, unsigned char *result);
+int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height);
+int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height);
+void applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation);
 
 ////////////////////MAIN////////////////////
 
@@ -122,8 +123,8 @@ int main(int argc, char **argv)
     {
         runtimeError(-5, argv[3]);
     }
-    std::cout << "Input path: "<< argv[2] <<"\n";
-    std::cout << "Output path: "<< argv[3] <<"\n";
+    std::cout << "Input path: " << argv[2] << "\n";
+    std::cout << "Output path: " << argv[3] << "\n";
 
     while ((ent_dir_in = readdir(dir_in)) != NULL)
     {
@@ -178,13 +179,14 @@ int main(int argc, char **argv)
                         if (gauss)
                         {
                             startTime = std::chrono::high_resolution_clock::now();
-                            fgauss(&bmp, result);
+                            applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, GAUSS);
+                            
                             endTime = std::chrono::high_resolution_clock::now();
                         }
                         else //sobel
                         {
                             startTime = std::chrono::high_resolution_clock::now();
-                            fsobel(&bmp,  result);
+                            applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, SOBEL);
                             endTime = std::chrono::high_resolution_clock::now();
                         }
                         time.operationTime = endTime - startTime;
@@ -202,9 +204,11 @@ int main(int argc, char **argv)
                     endTime = std::chrono::high_resolution_clock::now();
                     time.writeTime = endTime - startTime;
 
-                    std::cout << "File:  \"" << source_path << "\"(time: " << time.totalTime.count()<<")\n";
-                    
-                    displayTime(time,argv[1]);
+                    std::cout << "File:  \"" << source_path << "\"(time: " << time.totalTime.count() << ")\n";
+
+                    displayTime(time, argv[1]);
+                    //lsdisplayBMP(&bmp);
+
                     free(bmp.image);
                     free(source_path);
                     free(dest_path);
@@ -357,7 +361,27 @@ char *arrangePath(char *destination_path, char *destination_name)
     return path;
 }
 
-int accessPixel(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
+int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
+{
+    int sumSobelX = 0, sumSobelY = 0;
+    uint32_t colorX, colorY;
+    for (int j = -1; j <= 1; j++)
+    {
+        for (int i = -1; i <= 1; i++)
+        {
+            if ((row + j) >= 0 && (row + j) < (int)height && (col + i) >= 0 && (col + i) < (int)width)
+            {
+                colorX = arr[(row + j) * 3 * (int)width + (col + i) * 3 + k];
+                sumSobelX += colorX * sobelX[i + 1][j + 1];
+                colorY = arr[(row + j) * 3 * (int)width + (col + i) * 3 + k];
+                sumSobelY += colorY * sobelY[i + 1][j + 1];
+            }
+        }
+    }
+    return (abs(sumSobelX) / sobelWeight) + (abs(sumSobelY) / sobelWeight);
+}
+
+int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
 {
     int sum = 0;
 
@@ -375,52 +399,36 @@ int accessPixel(unsigned char *arr, int col, int row, int k, uint32_t width, uin
     return sum / gaussWeight;
 }
 
-void guassian_blur2D(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height)
+void applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation)
 {
-    for (uint32_t row = 0; row < height; row++)
+    std::cout << &arr <<"\t" <<&result <<"\n" ;
+
+    for (uint32_t row = 0; row < height; row++) //Rows
     {
-        for (uint32_t col = 0; col < width; col++)
+        for (uint32_t col = 0; col < width; col++) //Cols
         {
-            for (uint32_t k = 0; k < 3; k++)
+            for (uint32_t k = 0; k < 3; k++) //RGB Colors
             {
-                result[3 * row * width + 3 * col + k] = accessPixel(arr, col, row, k, width, height);
+                result[3 * row * width + 3 * col + k] = gaussMask(arr, col, row, k, width, height);
             }
         }
     }
-}
-
-int fgauss(bmp *bmp, unsigned char *result)
-{
-
-    //int row = bmp->infoHeader.width * (bmp->infoHeader.bpp / 8);
-
-    guassian_blur2D(bmp->image, result, bmp->infoHeader.width, bmp->infoHeader.height);
-    /*for (int i = 0; i < row; i++)
+    if (strcmp(blurOperation, SOBEL) == 0)
     {
-        for (int j = 0; j < bmp->infoHeader.height; j++)
+        std::cout << &arr <<"\t" <<&result <<"\n" ;
+        for (uint32_t row = 0; row < height; row++) //Rows
         {
-            
-            
-
-        }
-    }
-              //Byte i j
-            for (int k = 0; k < sizeof(gauss); k++)
+            for (uint32_t col = 0; col < width; col++) //Cols
             {
-                for (int l; l < sizeof(gauss), l++)
+                for (uint32_t k = 0; k < 3; k++) //RGB Colors
                 {
-                    //Mask k l
-                    bmp->image[i] * gauss[k][l]
+                    arr[3 * row * width + 3 * col + k] = sobelMask(result, col, row, k, width, height);
                 }
             }
-    */
-    return 0;
-}
-
-int fsobel(bmp *bmp, unsigned char *result)
-{
-    guassian_blur2D(bmp->image, result, bmp->infoHeader.width, bmp->infoHeader.height);
-    return 0;
+        }
+        result=arr;
+        std::cout << &arr <<"\t" <<&result <<"\n" ;
+    }
 }
 
 void displayBMP(bmp *bmp)
@@ -454,10 +462,10 @@ void displayBMPFile(bmpFileHeader *info)
 
 void displayTime(timeMetrics time, char *operation)
 {
-    std::cout << "\tLoad time: " << time.readingTime.count() <<"\n";
+    std::cout << "\tLoad time: " << time.readingTime.count() << "\n";
     if (strcmp(operation, COPY) != 0)
-        std::cout << "\t" << operation << " time: " << time.operationTime.count() <<"\n";
-    std::cout << "\tStore time: " << time.writeTime.count()<<"\n";
+        std::cout << "\t" << operation << " time: " << time.operationTime.count() << "\n";
+    std::cout << "\tStore time: " << time.writeTime.count() << "\n";
 }
 
 void runtimeError(int errorCode, std::string elem)

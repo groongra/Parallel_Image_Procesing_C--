@@ -15,9 +15,11 @@ $(BINDIR):
 	mkdir $(BINDIR)
 
 $(BINDIR)/image-seq: image-seq
+#image-seq:
 	$(CC) $(CFLAGS) -o $(BINDIR)/image-seq image-seq.cpp 
 
 $(BINDIR)/image-par: image-par
+#image-par:
 	$(CC) $(CFLAGS) -o $(BINDIR)/image-par image-par.cpp
 
 clear:
@@ -28,3 +30,4 @@ clear:
 
 
 
+ 
