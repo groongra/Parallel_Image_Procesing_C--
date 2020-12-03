@@ -11,7 +11,7 @@
 #include <math.h>
 #include <chrono>
 
-#define DEBUG 0
+#define DEBUG 1
 #define COPY "copy"
 #define GAUSS "gauss"
 #define SOBEL "sobel"
@@ -91,7 +91,7 @@ void readBMP(FILE *f, bmp *bmp);
 int writeBMP(bmp *bmp, char *copyPath);
 int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height);
 int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height);
-void applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation);
+unsigned char* applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation);
 
 ////////////////////MAIN////////////////////
 
@@ -179,19 +179,18 @@ int main(int argc, char **argv)
                         if (gauss)
                         {
                             startTime = std::chrono::high_resolution_clock::now();
-                            applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, GAUSS);
-                            
+                            bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, GAUSS);
                             endTime = std::chrono::high_resolution_clock::now();
                         }
                         else //sobel
                         {
                             startTime = std::chrono::high_resolution_clock::now();
-                            applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, SOBEL);
+                            bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, SOBEL);
                             endTime = std::chrono::high_resolution_clock::now();
                         }
                         time.operationTime = endTime - startTime;
                     }
-                    bmp.image = result;
+                    //bmp.image = result;
                     //Copy file
                     dest_path = arrangePath(argv[3], ent_dir_in->d_name);
                     if (DEBUG)
@@ -399,10 +398,8 @@ int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
     return sum / gaussWeight;
 }
 
-void applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation)
+unsigned char* applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation)
 {
-    std::cout << &arr <<"\t" <<&result <<"\n" ;
-
     for (uint32_t row = 0; row < height; row++) //Rows
     {
         for (uint32_t col = 0; col < width; col++) //Cols
@@ -414,8 +411,7 @@ void applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint
         }
     }
     if (strcmp(blurOperation, SOBEL) == 0)
-    {
-        std::cout << &arr <<"\t" <<&result <<"\n" ;
+    {   
         for (uint32_t row = 0; row < height; row++) //Rows
         {
             for (uint32_t col = 0; col < width; col++) //Cols
@@ -426,9 +422,9 @@ void applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint
                 }
             }
         }
-        result=arr;
-        std::cout << &arr <<"\t" <<&result <<"\n" ;
+        result = arr;
     }
+    return result;
 }
 
 void displayBMP(bmp *bmp)
