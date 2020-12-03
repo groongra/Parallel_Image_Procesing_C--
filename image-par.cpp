@@ -368,7 +368,7 @@ int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
     int sumSobelX = 0, sumSobelY = 0;
     uint32_t colorX, colorY;
 
-#pragma omp parallel for num_threads(OMP_NUM_THREADS)
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS)
 
     for (int j = -1; j <= 1; j++)
     {
@@ -390,10 +390,10 @@ int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
 {
     int sum = 0;
 
-#pragma omp parallel for num_threads(OMP_NUM_THREADS)
+//#pragma omp parallel for num_threads(OMP_NUM_THREADS)
+    //#pragma omp parallel for
     for (int j = -2; j <= 2; j++)
     {
-        #pragma omp parallel for reduction(+:sum)
         for (int i = -2; i <= 2; i++)
         {
             if ((row + j) >= 0 && (row + j) < (int)height && (col + i) >= 0 && (col + i) < (int)width)
@@ -408,7 +408,7 @@ int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
 
 unsigned char *applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation)
 {
-#pragma omp parallel for collapse(3) num_threads(OMP_NUM_THREADS)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS)
     for (uint32_t row = 0; row < height; row++) //Rows
     {
         for (uint32_t col = 0; col < width; col++) //Cols
@@ -421,7 +421,7 @@ unsigned char *applyFilter(unsigned char *arr, unsigned char *result, uint32_t w
     }
     if (strcmp(blurOperation, SOBEL) == 0)
     {
-#pragma omp parallel for collapse(3) num_threads(OMP_NUM_THREADS)
+        //#pragma omp parallel for collapse(3) num_threads(OMP_NUM_THREADS)
         for (uint32_t row = 0; row < height; row++) //Rows
         {
             for (uint32_t col = 0; col < width; col++) //Cols
