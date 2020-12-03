@@ -11,7 +11,7 @@
 #include <math.h>
 #include <chrono>
 
-#define DEBUG 1
+#define DEBUG 0
 #define COPY "copy"
 #define GAUSS "gauss"
 #define SOBEL "sobel"
@@ -26,8 +26,7 @@ typedef struct timeMetrics
 {
     TIME_UNIT readingTime;
     TIME_UNIT operationTime;
-    TIME_UNIT writeTime;
-    TIME_UNIT totalTime = readingTime + operationTime + writeTime;
+    TIME_UNIT writeTime;    
 
 } timeMetrics;
 
@@ -198,12 +197,13 @@ int main(int argc, char **argv)
                     startTime = std::chrono::high_resolution_clock::now();
                     if (writeBMP(&bmp, dest_path) < 0)
 
-                        if (DEBUG)
+                    if (DEBUG)
                             std::cout << "Failed to copy " << ent_dir_in->d_name << " in " << dest_path << "\n";
                     endTime = std::chrono::high_resolution_clock::now();
                     time.writeTime = endTime - startTime;
-
-                    std::cout << "File:  \"" << source_path << "\"(time: " << time.totalTime.count() << ")\n";
+                    
+                    float totalTime = time.readingTime.count() + time.operationTime.count() + time.writeTime.count();
+                    std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
 
                     displayTime(time, argv[1]);
                     //lsdisplayBMP(&bmp);

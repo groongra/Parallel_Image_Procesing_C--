@@ -10,11 +10,10 @@ $(BINDIR)/image-seq \
 $(BINDIR)/image-par \
 
 all: $(BINDIR) $(PROGS)
-	#$(CC) $(CFLAGS) -o $(BINDIR)/image-seq image-seq.cpp 
-	#$(CC) $(CFLAGS) -o $(BINDIR)/image-par image-par.cpp
+
 
 $(BINDIR):
-	mkdir $(BINDIR)
+	mkdir $(BINDIR) $(PROGS)
 
 $(BINDIR)/image-seq: image-seq
 	$(CC) $(CFLAGS) -o $(BINDIR)/image-seq image-seq.cpp 
