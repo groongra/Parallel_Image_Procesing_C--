@@ -2,8 +2,8 @@
 #Clean directory: make clean
 
 CC=g++
-CFLAGS=-std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors
-#CFLAGS=-std=c++17
+CFLAGS=-std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors 
+CFLAGS1=-std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors -fopenmp
 BINDIR=bin
 PROGS=\
 $(BINDIR)/image-seq \
@@ -21,7 +21,7 @@ $(BINDIR)/image-seq: image-seq
 	@echo""
 
 $(BINDIR)/image-par: image-par
-	$(CC) $(CFLAGS) -o $(BINDIR)/image-par image-par.cpp
+	$(CC) $(CFLAGS1) -o $(BINDIR)/image-par image-par.cpp
 	@echo""
 
 clear:
