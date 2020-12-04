@@ -61,6 +61,35 @@ typedef struct bmp
     unsigned char *image;
 } bmp;
 
+typedef struct defaultBmpFileHeader
+{
+    char B = 'B';   /* 'B' 'M' Bytes */
+    char M = 'M';   /* 'B' 'M' Bytes */
+   /* FileSize */
+    uint32_t resv = 0;   /* Reserved */
+    uint32_t offset = 54; /* Offset*/
+
+} defaultBmpFileHeader;
+
+typedef struct defaultBmpInfoHeader
+{
+    uint32_t headersize = 40;   /* Header size */
+    /* Img width */
+    /* Img height */
+    uint16_t planes     = 1;    /* Color planes (1) */
+    uint16_t bpp        = 24;   /* Bits per pixel */
+    uint32_t compress   = 0;    /* Compresion */
+    /* Img size */
+    uint32_t bpmx       = 2835; /* Bits x resolution per meter*/
+    uint32_t bpmy       = 2835; /* Bits y resolution per meter*/
+    uint32_t colors     = 0;    /* Color palette*/
+    uint32_t imxtcolors = 0;    /* Relevant colors (0 all)*/
+
+} defaultBmpInfoHeader;
+
+defaultBmpFileHeader defaultFile;
+defaultBmpInfoHeader defaultHeader;
+
 int gauss[5][5]{
     {1, 4, 7, 4, 1},
     {4, 16, 26, 16, 4},
@@ -129,8 +158,8 @@ int main(int argc, char **argv)
     {
         if (!S_ISDIR(statbuff.st_mode)) //Check it is a Dir file
         {
-
             extension = strchr(ent_dir_in->d_name, '.');
+
             if (extension && (strcmp(extension, ".bmp") == 0)) //Check BMP extension
             {
 
@@ -313,23 +342,31 @@ int writeBMP(bmp *bmp, char *copyPath)
 
     if (fdDest != NULL)
     {
-        if (fwrite(&bmp->fileHeader, sizeof(u_int16_t), 1, fdDest) != 1)
+        if (fwrite(&defaultFile.B, sizeof(char), 2, fdDest) != 2)
             return -1; //  2B
-        if (fwrite(&bmp->fileHeader.size, sizeof(u_int32_t), 3, fdDest) != 3)
-            return -1; //  12B
-        if (fwrite(&bmp->infoHeader.headersize, sizeof(u_int32_t), 3, fdDest) != 3)
-            return -1; //  12B
-        if (fwrite(&bmp->infoHeader.planes, sizeof(u_int16_t), 2, fdDest) != 2)
+        bmp->fileHeader.size = bmp->infoHeader.imgsize + BMP_FILE_HEADER + BMP_INFO_HEADER;
+        if (fwrite(&bmp->fileHeader.size, sizeof(u_int32_t), 1, fdDest) != 1)
             return -1; //  4B
-        if (fwrite(&bmp->infoHeader.compress, sizeof(u_int32_t), 6, fdDest) != 6)
-            return -1; //  24B
-        fseek(fdDest, bmp->fileHeader.offset, SEEK_SET);
+        if (fwrite(&defaultFile.resv, sizeof(u_int32_t), 2, fdDest) != 2)
+            return -1; //  8B
+        if (fwrite(&defaultHeader.headersize, sizeof(u_int32_t), 1, fdDest) != 1)
+            return -1; //  4B
+        if (fwrite(&bmp->infoHeader.width, sizeof(u_int32_t), 2, fdDest) != 2)
+            return -1; //  8B
+        if (fwrite(&defaultHeader.planes, sizeof(u_int16_t), 2, fdDest) != 2)
+            return -1; //  8B
+        if (fwrite(&defaultHeader.compress, sizeof(u_int32_t), 1, fdDest) != 1)
+            return -1; //  4B
+        if (fwrite(&bmp->infoHeader.imgsize, sizeof(u_int16_t), 1, fdDest) != 1)
+            return -1; //  4B
+        if (fwrite(&defaultHeader.bpmx, sizeof(u_int32_t), 4, fdDest) != 4)
+            return -1; //  12B
+        fseek(fdDest, defaultFile.offset, SEEK_SET);
 
         /*if (fwrite(bmp_img, imgSize, 1, fdDest) != 1)
             return
              -1; //  24B
         */
-
         int bytesPerPixel = ((int)bmp->infoHeader.bpp) / 8;
         int unpaddedRowSize = (bmp->infoHeader.width) * (bytesPerPixel);
         int padding = (4 - (unpaddedRowSize % 4));

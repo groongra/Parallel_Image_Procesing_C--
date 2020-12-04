@@ -328,11 +328,6 @@ int writeBMP(bmp *bmp, char *copyPath)
             return -1; //  24B
         fseek(fdDest, bmp->fileHeader.offset, SEEK_SET);
 
-        /*if (fwrite(bmp_img, imgSize, 1, fdDest) != 1)
-            return
-             -1; //  24B
-        */
-
         int bytesPerPixel = ((int)bmp->infoHeader.bpp) / 8;
         int unpaddedRowSize = (bmp->infoHeader.width) * (bytesPerPixel);
         int padding = (4 - (unpaddedRowSize % 4));
@@ -389,12 +384,11 @@ int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
 int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
 {
     int sum = 0;
-
-//#pragma omp parallel for num_threads(OMP_NUM_THREADS)
-    //#pragma omp parallel for
-    for (int j = -2; j <= 2; j++)
+    int j = -2, i = -2;
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS) schedule(static)
+    for (j = -2; j <= 2; j++)
     {
-        for (int i = -2; i <= 2; i++)
+        for (i = -2; i <= 2; i++)
         {
             if ((row + j) >= 0 && (row + j) < (int)height && (col + i) >= 0 && (col + i) < (int)width)
             {
@@ -408,7 +402,10 @@ int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
 
 unsigned char *applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation)
 {
-    #pragma omp parallel for num_threads(OMP_NUM_THREADS)
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS)
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS) schedule(dynamic)
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS) schedule(guided)
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS) schedule(runtime)
     for (uint32_t row = 0; row < height; row++) //Rows
     {
         for (uint32_t col = 0; col < width; col++) //Cols
@@ -421,7 +418,7 @@ unsigned char *applyFilter(unsigned char *arr, unsigned char *result, uint32_t w
     }
     if (strcmp(blurOperation, SOBEL) == 0)
     {
-        //#pragma omp parallel for collapse(3) num_threads(OMP_NUM_THREADS)
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS)
         for (uint32_t row = 0; row < height; row++) //Rows
         {
             for (uint32_t col = 0; col < width; col++) //Cols
