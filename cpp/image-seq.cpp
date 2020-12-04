@@ -219,6 +219,7 @@ int main(int argc, char **argv)
                         time.operationTime = endTime - startTime;
                     }
                     //bmp.image = result;
+                    
                     //Copy file
                     dest_path = arrangePath(argv[3], ent_dir_in->d_name);
                     if (DEBUG)
@@ -363,10 +364,6 @@ int writeBMP(bmp *bmp, char *copyPath)
             return -1; //  12B
         fseek(fdDest, defaultFile.offset, SEEK_SET);
 
-        /*if (fwrite(bmp_img, imgSize, 1, fdDest) != 1)
-            return
-             -1; //  24B
-        */
         int bytesPerPixel = ((int)bmp->infoHeader.bpp) / 8;
         int unpaddedRowSize = (bmp->infoHeader.width) * (bytesPerPixel);
         int padding = (4 - (unpaddedRowSize % 4));
