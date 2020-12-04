@@ -1,39 +1,24 @@
-#Compile everything with: make all
-#Clean directory: make clean
+#Makefile
 
-CC=g++
-CFLAGS=-std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors 
-CFLAGS1=-std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors -fopenmp
-BINDIR=bin
-PROGS=\
-$(BINDIR)/image-seq \
-$(BINDIR)/image-par \
+CC          = g++
+CFLAG       = -std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors -fopenmp
+BIN=./bin
+SOURCE=./cpp
+LIST=$(BIN)/image-seq $(BIN)/image-par
+FOLDERS = ${BIN} ./src ./dest ./xsrc ./xdest
 
-all: $(BINDIR) $(PROGS)
+all: $(LIST)
 
+$(BIN)/%:  $(SOURCE)/%.cpp
+	$(CC) $(INC) $< $(CFLAG) -o $@ $(LIBS)
+	
+clean:
+	rm -f $(BIN)/* ./src/* ./dest/* ./xsrc/* ./xdest/*
 
-$(BINDIR):
-	mkdir $(BINDIR) $(PROGS)
+create:
+	@echo "Create folders"
+	mkdir -p ${FOLDERS}
 
-$(BINDIR)/image-seq: image-seq
-	$(CC) $(CFLAGS) -o $(BINDIR)/image-seq image-seq.cpp 
-	@echo""
-
-$(BINDIR)/image-par: image-par
-	$(CC) $(CFLAGS1) -o $(BINDIR)/image-par image-par.cpp
-	@echo""
-
-clear:
-	@echo "Remove bin folder"
-	$(RM) $(PROGS)
-	@echo "Emptying src dest and xsrc xdest folders"
-	$(RM) -f dest/*
-	$(RM) -f xdest/*
-	#$(RM) -f dsrc/*
-	#$(RM) -f xsrc/*
-
-
-
-
-
- 
+remove:
+	@echo "remove folders"
+	$(RM) -r ${FOLDERS}
