@@ -10,7 +10,6 @@
 #include <sys/stat.h>
 #include <math.h>
 #include <chrono>
-#include <omp.h>
 
 #define DEBUG 0
 #define COPY "copy"
@@ -22,14 +21,13 @@
 #define BMP_FILE_HEADER 14 /* headerSize*/
 #define BMP_INFO_HEADER 40 /* headerSize*/
 #define TIME_UNIT std::chrono::duration<float, std::micro>
-#define OMP_NUM_THREADS 4
+#define OMP_NUM_THREADS 6
 
 typedef struct timeMetrics
 {
     TIME_UNIT readingTime;
     TIME_UNIT operationTime;
     TIME_UNIT writeTime;
-    TIME_UNIT totalTime = readingTime + operationTime + writeTime;
 
 } timeMetrics;
 
@@ -45,8 +43,8 @@ typedef struct bmpFileHeader
 typedef struct bmpInfoHeader
 {
     uint32_t headersize; /* Header size */
-    uint32_t width;      /* Img width */
-    uint32_t height;     /* Img height */
+    int width;           /* Img width */
+    int height;          /* Img height */
     uint16_t planes;     /* Color planes (1) */
     uint16_t bpp;        /* Bits per pixel */
     uint32_t compress;   /* Compresion */
@@ -63,6 +61,35 @@ typedef struct bmp
     bmpInfoHeader infoHeader;
     unsigned char *image;
 } bmp;
+
+typedef struct defaultBmpFileHeader
+{
+    char B = 'B';         /* 'B' 'M' Bytes */
+    char M = 'M';         /* 'B' 'M' Bytes */
+                          /* FileSize */
+    uint32_t resv = 0;    /* Reserved */
+    uint32_t offset = 54; /* Offset*/
+
+} defaultBmpFileHeader;
+
+typedef struct defaultBmpInfoHeader
+{
+    uint32_t headersize = 40; /* Header size */
+    /* Img width */
+    /* Img height */
+    uint16_t planes = 1;   /* Color planes (1) */
+    uint16_t bpp = 24;     /* Bits per pixel */
+    uint32_t compress = 0; /* Compresion */
+    /* Img size */
+    uint32_t bpmx = 2835;    /* Bits x resolution per meter*/
+    uint32_t bpmy = 2835;    /* Bits y resolution per meter*/
+    uint32_t colors = 0;     /* Color palette*/
+    uint32_t imxtcolors = 0; /* Relevant colors (0 all)*/
+
+} defaultBmpInfoHeader;
+
+defaultBmpFileHeader defaultFile;
+defaultBmpInfoHeader defaultHeader;
 
 int gauss[5][5]{
     {1, 4, 7, 4, 1},
@@ -89,11 +116,11 @@ void displayBMPFile(bmpFileHeader *info);
 void displayTime(timeMetrics time, char *operation);
 void runtimeError(int errorCode, std::string elem);
 int checkBMPHeader(bmpInfoHeader *bInfoHeader);
-void readBMP(FILE *f, bmp *bmp);
+int readBMP(FILE *f, bmp *bmp);
 int writeBMP(bmp *bmp, char *copyPath);
-int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height);
-int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height);
-unsigned char *applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation);
+int sobelMask(unsigned char *arr, int col, int row, int k, int width, int height);
+int gaussMask(unsigned char *arr, int col, int row, int k, int width, int height);
+unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width, int height, const char *blurOperation);
 
 ////////////////////MAIN////////////////////
 
@@ -132,8 +159,8 @@ int main(int argc, char **argv)
     {
         if (!S_ISDIR(statbuff.st_mode)) //Check it is a Dir file
         {
-
             extension = strchr(ent_dir_in->d_name, '.');
+
             if (extension && (strcmp(extension, ".bmp") == 0)) //Check BMP extension
             {
 
@@ -149,71 +176,74 @@ int main(int argc, char **argv)
                 FILE *source = fopen(source_path, "r"); //Open source file
 
                 auto startTime = std::chrono::high_resolution_clock::now();
-                readBMP(source, &bmp); //Obtain BMP header and file structure
-                auto endTime = std::chrono::high_resolution_clock::now();
-                time.readingTime = endTime - startTime;
-
-                if (bmp.image == NULL)
-                    if (DEBUG)
-                        std::cout
-                            << "> Can't open \"" << source_path << "\"\n"; //NO access
-
-                if (checkBMPHeader(&bmp.infoHeader))
+                if (readBMP(source, &bmp) == 0) //Obtain BMP header and file structure
                 {
+                    auto endTime = std::chrono::high_resolution_clock::now();
+                    time.readingTime = endTime - startTime;
 
-                    if (DEBUG)
-                        displayBMP(&bmp);
+                    if (bmp.image == NULL)
+                        if (DEBUG)
+                            std::cout
+                                << "> Can't open \"" << source_path << "\"\n"; //NO access
 
-                    //Apply tranformation if present
-                    unsigned char *result;
-                    if (copy)
+                    if (checkBMPHeader(&bmp.infoHeader))
                     {
-                        result = bmp.image;
-                        time.operationTime = TIME_UNIT::zero();
-                    }
-                    else
-                    {
-                        int bytesPerPixel = ((int)bmp.infoHeader.bpp) / 8;
-                        int unpaddedRowSize = (bmp.infoHeader.width) * (bytesPerPixel);
-                        int totalSize = unpaddedRowSize * (bmp.infoHeader.height);
-                        result = (unsigned char *)malloc(totalSize);
-
-                        if (gauss)
-                        {
-                            startTime = std::chrono::high_resolution_clock::now();
-                            bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, GAUSS);
-                            endTime = std::chrono::high_resolution_clock::now();
-                        }
-                        else //sobel
-                        {
-                            startTime = std::chrono::high_resolution_clock::now();
-                            bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, SOBEL);
-                            endTime = std::chrono::high_resolution_clock::now();
-                        }
-                        time.operationTime = endTime - startTime;
-                    }
-                    //bmp.image = result;
-                    //Copy file
-                    dest_path = arrangePath(argv[3], ent_dir_in->d_name);
-                    if (DEBUG)
-                        std::cout << "Copying " << dest_path << "\n";
-                    startTime = std::chrono::high_resolution_clock::now();
-                    if (writeBMP(&bmp, dest_path) < 0)
 
                         if (DEBUG)
-                            std::cout << "Failed to copy " << ent_dir_in->d_name << " in " << dest_path << "\n";
-                    endTime = std::chrono::high_resolution_clock::now();
-                    time.writeTime = endTime - startTime;
+                            displayBMP(&bmp);
 
-                    float totalTime = time.readingTime.count() + time.operationTime.count() + time.writeTime.count();
-                    std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
+                        //Apply tranformation if present
+                        unsigned char *result;
+                        if (copy)
+                        {
+                            result = bmp.image;
+                            time.operationTime = TIME_UNIT::zero();
+                        }
+                        else
+                        {
+                            int bytesPerPixel = ((int)bmp.infoHeader.bpp) / 8;
+                            int unpaddedRowSize = (bmp.infoHeader.width) * (bytesPerPixel);
+                            int totalSize = unpaddedRowSize * (bmp.infoHeader.height);
+                            result = (unsigned char *)malloc(totalSize);
 
-                    displayTime(time, argv[1]);
-                    //lsdisplayBMP(&bmp);
+                            if (gauss)
+                            {
+                                startTime = std::chrono::high_resolution_clock::now();
+                                bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, GAUSS);
+                                endTime = std::chrono::high_resolution_clock::now();
+                            }
+                            else //sobel
+                            {
+                                startTime = std::chrono::high_resolution_clock::now();
+                                bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, SOBEL);
+                                endTime = std::chrono::high_resolution_clock::now();
+                            }
+                            time.operationTime = endTime - startTime;
+                        }
+                        //bmp.image = result;
 
-                    free(bmp.image);
-                    free(source_path);
-                    free(dest_path);
+                        //Copy file
+                        dest_path = arrangePath(argv[3], ent_dir_in->d_name);
+                        if (DEBUG)
+                            std::cout << "Copying " << dest_path << "\n";
+                        startTime = std::chrono::high_resolution_clock::now();
+                        if (writeBMP(&bmp, dest_path) < 0)
+
+                            if (DEBUG)
+                                std::cout << "Failed to copy " << ent_dir_in->d_name << " in " << dest_path << "\n";
+                        endTime = std::chrono::high_resolution_clock::now();
+                        time.writeTime = endTime - startTime;
+
+                        float totalTime = time.readingTime.count() + time.operationTime.count() + time.writeTime.count();
+                        std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
+
+                        displayTime(time, argv[1]);
+                        //lsdisplayBMP(&bmp);
+
+                        free(bmp.image);
+                        free(source_path);
+                        free(dest_path);
+                    }
                 }
                 //fclose(source);
             }
@@ -225,7 +255,7 @@ int main(int argc, char **argv)
     exit(0);
 }
 
-void readBMP(FILE *f, bmp *bmp)
+int readBMP(FILE *f, bmp *bmp)
 {
     if (f == NULL)
     {
@@ -235,19 +265,23 @@ void readBMP(FILE *f, bmp *bmp)
     //fread(bFileHeader, BMP_FILE_HEADER, 1, f); //Read file's header
 
     //fseek(f, 0, SEEK_SET);
-    fread(&bmp->fileHeader.type, sizeof(uint16_t), 1, f); // Read image data, in other words, imgsize bytes
+    if (fread(&bmp->fileHeader.type, sizeof(uint16_t), 1, f) != 1) // Read image data, in other words, imgsize bytes
+        return -1;
     //std::cout << "type " << (char)bFileHeader->type << "\n";
 
     //fseek(f, 2, SEEK_SET);
-    fread(&bmp->fileHeader.size, sizeof(uint32_t), 1, f); // Read image data, in other words, imgsize bytes
+    if (fread(&bmp->fileHeader.size, sizeof(uint32_t), 1, f) != 1) // Read image data, in other words, imgsize bytes
+        return -1;
     //std::cout << "size " << bFileHeader->size << "\n";
 
     //fseek(f, 6, SEEK_SET);
-    fread(&bmp->fileHeader.resv, sizeof(uint32_t), 1, f); // Read image data, in other words, imgsize bytes
+    if (fread(&bmp->fileHeader.resv, sizeof(uint32_t), 1, f) != 1) // Read image data, in other words, imgsize bytes
+        return -1;
     //std::cout << "resv " << bFileHeader->resv << "\n";
 
     //fseek(f, 10, SEEK_SET);
-    fread(&bmp->fileHeader.offset, sizeof(uint32_t), 1, f); // Read image data, in other words, imgsize bytes
+    if (fread(&bmp->fileHeader.offset, sizeof(uint32_t), 1, f) != 1) // Read image data, in other words, imgsize bytes
+        return -1;
     //std::cout << "OFFSET " << bFileHeader->offset << "\n";
 
     if (bmp->fileHeader.type != 0x4D42) /* Check correct format */
@@ -256,7 +290,8 @@ void readBMP(FILE *f, bmp *bmp)
         bmp->image = NULL;
     }
     //fseek(f, BMP_FILE_HEADER, SEEK_SET);
-    fread(&bmp->infoHeader, BMP_INFO_HEADER, 1, f); //Read bmp's header
+    if (fread(&bmp->infoHeader, BMP_INFO_HEADER, 1, f) != 1) //Read bmp's header
+        return -1;
     //char *imgdata;                                  /* Img data */
     //imgdata = (char *)malloc(bInfoHeader->imgsize); //Allocate memory (imgsize)
 
@@ -265,6 +300,7 @@ void readBMP(FILE *f, bmp *bmp)
 
     int bytesPerPixel = ((int)bmp->infoHeader.bpp) / 8;
     int unpaddedRowSize = (bmp->infoHeader.width) * (bytesPerPixel);
+    size_t size_t_cast_unpaddedRowSize = (size_t)unpaddedRowSize;
     int padding = (4 - (unpaddedRowSize % 4));
     if (padding == 4)
         padding = 0;
@@ -275,13 +311,15 @@ void readBMP(FILE *f, bmp *bmp)
 
     bmp->image = (unsigned char *)malloc(totalSize);
     unsigned char *currentRowPointer = bmp->image + ((bmp->infoHeader.height - 1) * unpaddedRowSize);
-    for (uint32_t i = 0; i < bmp->infoHeader.height; i++)
+    for (int i = 0; i < bmp->infoHeader.height; i++)
     {
         fseek(f, bmp->fileHeader.offset + (i * paddedRowSize), SEEK_SET);
-        fread(currentRowPointer, 1, unpaddedRowSize, f);
+        if (fread(currentRowPointer, 1, unpaddedRowSize, f) != size_t_cast_unpaddedRowSize)
+            return -1;
         currentRowPointer -= unpaddedRowSize;
     }
     fclose(f);
+    return 0;
 }
 
 int checkBMPHeader(bmpInfoHeader *bInfoHeader)
@@ -316,22 +354,26 @@ int writeBMP(bmp *bmp, char *copyPath)
 
     if (fdDest != NULL)
     {
-        if (fwrite(&bmp->fileHeader, sizeof(u_int16_t), 1, fdDest) != 1)
+        if (fwrite(&defaultFile.B, sizeof(char), 2, fdDest) != 2)
             return -1; //  2B
-        if (fwrite(&bmp->fileHeader.size, sizeof(u_int32_t), 3, fdDest) != 3)
-            return -1; //  12B
-        if (fwrite(&bmp->infoHeader.headersize, sizeof(u_int32_t), 3, fdDest) != 3)
-            return -1; //  12B
-        if (fwrite(&bmp->infoHeader.planes, sizeof(u_int16_t), 2, fdDest) != 2)
+        bmp->fileHeader.size = bmp->infoHeader.imgsize + BMP_FILE_HEADER + BMP_INFO_HEADER;
+        if (fwrite(&bmp->fileHeader.size, sizeof(u_int32_t), 1, fdDest) != 1)
             return -1; //  4B
-        if (fwrite(&bmp->infoHeader.compress, sizeof(u_int32_t), 6, fdDest) != 6)
-            return -1; //  24B
-        fseek(fdDest, bmp->fileHeader.offset, SEEK_SET);
-
-        /*if (fwrite(bmp_img, imgSize, 1, fdDest) != 1)
-            return
-             -1; //  24B
-        */
+        if (fwrite(&defaultFile.resv, sizeof(u_int32_t), 2, fdDest) != 2)
+            return -1; //  8B
+        if (fwrite(&defaultHeader.headersize, sizeof(u_int32_t), 1, fdDest) != 1)
+            return -1; //  4B
+        if (fwrite(&bmp->infoHeader.width, sizeof(u_int32_t), 2, fdDest) != 2)
+            return -1; //  8B
+        if (fwrite(&defaultHeader.planes, sizeof(u_int16_t), 2, fdDest) != 2)
+            return -1; //  8B
+        if (fwrite(&defaultHeader.compress, sizeof(u_int32_t), 1, fdDest) != 1)
+            return -1; //  4B
+        if (fwrite(&bmp->infoHeader.imgsize, sizeof(u_int16_t), 1, fdDest) != 1)
+            return -1; //  4B
+        if (fwrite(&defaultHeader.bpmx, sizeof(u_int32_t), 4, fdDest) != 4)
+            return -1; //  12B
+        fseek(fdDest, defaultFile.offset, SEEK_SET);
 
         int bytesPerPixel = ((int)bmp->infoHeader.bpp) / 8;
         int unpaddedRowSize = (bmp->infoHeader.width) * (bytesPerPixel);
@@ -342,7 +384,7 @@ int writeBMP(bmp *bmp, char *copyPath)
         if (DEBUG)
             std::cout << "\t| (padded|unpadded) ::" << paddedRowSize << " | " << unpaddedRowSize << "-> padding:" << padding << "\n";
 
-        for (uint32_t i = 0; i < bmp->infoHeader.height; i++)
+        for (int i = 0; i < bmp->infoHeader.height; i++)
         {
             int pixelOffset = ((bmp->infoHeader.height - i) - 1) * unpaddedRowSize;
             fwrite(&bmp->image[pixelOffset], 1, paddedRowSize, fdDest);
@@ -363,13 +405,10 @@ char *arrangePath(char *destination_path, char *destination_name)
     return path;
 }
 
-int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
+int sobelMask(unsigned char *arr, int col, int row, int k, int width, int height)
 {
     int sumSobelX = 0, sumSobelY = 0;
     uint32_t colorX, colorY;
-
-    //#pragma omp parallel for num_threads(OMP_NUM_THREADS)
-
     for (int j = -1; j <= 1; j++)
     {
         for (int i = -1; i <= 1; i++)
@@ -386,12 +425,10 @@ int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
     return (abs(sumSobelX) / sobelWeight) + (abs(sumSobelY) / sobelWeight);
 }
 
-int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
+/*int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
 {
     int sum = 0;
 
-//#pragma omp parallel for num_threads(OMP_NUM_THREADS)
-    //#pragma omp parallel for
     for (int j = -2; j <= 2; j++)
     {
         for (int i = -2; i <= 2; i++)
@@ -404,29 +441,44 @@ int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
         }
     }
     return sum / gaussWeight;
-}
+}*/
 
-unsigned char *applyFilter(unsigned char *arr, unsigned char *result, uint32_t width, uint32_t height, const char *blurOperation)
+unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width, int height, const char *blurOperation)
 {
-    #pragma omp parallel for num_threads(OMP_NUM_THREADS)
-    for (uint32_t row = 0; row < height; row++) //Rows
+    int row, col, k, color;
+    int j, i, sum;
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS) private(row, col, k, j, i, color) shared(sum) schedule(dynamic)
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS)
+    for (row = 0; row < height; row++) //Rows
     {
-        for (uint32_t col = 0; col < width; col++) //Cols
+        for (col = 0; col < width; col++) //Cols
         {
-            for (uint32_t k = 0; k < 3; k++) //RGB Colors
+            for (k = 0; k < 3; k++) //RGB Colors
             {
-                result[3 * row * width + 3 * col + k] = gaussMask(arr, col, row, k, width, height);
+                sum = 0;
+
+                for (j = -2; j <= 2; j++)
+                {
+                    for (i = -2; i <= 2; i++)
+                    {
+                        if ((row + j) >= 0 && (row + j) < (int)height && (col + i) >= 0 && (col + i) < (int)width)
+                        {
+                            color = arr[(row + j) * 3 * (int)width + (col + i) * 3 + k];
+                            sum += color * gauss[i + 2][j + 2];
+                        }
+                    }
+                }
+                result[3 * row * width + 3 * col + k] = sum / gaussWeight;
             }
         }
     }
     if (strcmp(blurOperation, SOBEL) == 0)
     {
-        //#pragma omp parallel for collapse(3) num_threads(OMP_NUM_THREADS)
-        for (uint32_t row = 0; row < height; row++) //Rows
+        for (row = 0; row < height; row++) //Rows
         {
-            for (uint32_t col = 0; col < width; col++) //Cols
+            for (col = 0; col < width; col++) //Cols
             {
-                for (uint32_t k = 0; k < 3; k++) //RGB Colors
+                for (k = 0; k < 3; k++) //RGB Colors
                 {
                     arr[3 * row * width + 3 * col + k] = sobelMask(result, col, row, k, width, height);
                 }

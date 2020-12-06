@@ -1,7 +1,8 @@
 #Makefile
 
 CC          = g++
-CFLAG       = -std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors -fopenmp
+CFLAG       = -std=c++17 -Wall -Wextra -Wno-deprecated -Werror -pedantic -pedantic-errors #-fopenmp -O3 -DNDEBUG
+
 BIN=./bin
 SOURCE=./cpp
 LIST=$(BIN)/image-seq $(BIN)/image-par
