@@ -151,8 +151,8 @@ int main(int argc, char **argv)
     {
         runtimeError(-5, argv[3]);
     }
-    std::cout << "Input path: " << argv[2] << "\n";
-    std::cout << "Output path: " << argv[3] << "\n";
+    //      std::cout << "Input path: " << argv[2] << "\n";
+    //      std::cout << "Output path: " << argv[3] << "\n";
 
     while ((ent_dir_in = readdir(dir_in)) != NULL)
     {
@@ -235,9 +235,8 @@ int main(int argc, char **argv)
                         time.writeTime = endTime - startTime;
 
                         float totalTime = time.readingTime.count() + time.operationTime.count() + time.writeTime.count();
-                        std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
-
-                        displayTime(time, argv[1]);
+                        //                      std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
+                        std::cout << totalTime << "\n";
                         //lsdisplayBMP(&bmp);
 
                         free(bmp.image);

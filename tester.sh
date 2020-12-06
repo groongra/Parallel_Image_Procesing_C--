@@ -1,18 +1,8 @@
 #!/bin/bash
 
-#Testing
+#Testing seq
 
-    for i in {1..15}
+    for i in {1..20}
     do
-        ./bin/image-par copy src dest | grep "src/pyramid.bmp"
-    done
-    echo
-    for i in {1..15}
-    do
-        ./bin/image-par copy src dest | grep "src/balloon.bmp"
-    done
-    echo
-    for i in {1..15}
-    do
-        ./bin/image-par copy src dest | grep "src/car.bmp"
+        ./bin/image-seq copy src dest
     done
