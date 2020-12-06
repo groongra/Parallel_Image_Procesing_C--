@@ -447,7 +447,7 @@ unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width,
 {
     int row, col, k, color;
     int j, i, sum;
-#pragma omp parallel for num_threads(OMP_NUM_THREADS) private(row, col, k, j, i, color) shared(sum) schedule(dynamic)
+    //#pragma omp parallel for num_threads(OMP_NUM_THREADS) private(row, col, k, j, i, color) shared(sum) schedule(dynamic)
     //#pragma omp parallel for num_threads(OMP_NUM_THREADS)
     for (row = 0; row < height; row++) //Rows
     {
