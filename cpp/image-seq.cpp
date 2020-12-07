@@ -73,13 +73,13 @@ typedef struct defaultBmpFileHeader
 
 typedef struct defaultBmpInfoHeader
 {
-    int headersize = 40; /* Header size */
-    /* Img width */
-    /* Img height */
-    uint16_t planes = 1;   /* Color planes (1) */
-    uint16_t bpp = 24;     /* Bits per pixel */
-    uint32_t compress = 0; /* Compresion */
-    /* Img size */
+    int headersize = 40;     /* Header size */
+                             /* Img width */
+                             /* Img height */
+    uint16_t planes = 1;     /* Color planes (1) */
+    uint16_t bpp = 24;       /* Bits per pixel */
+    uint32_t compress = 0;   /* Compresion */
+                             /* Img size */
     uint32_t bpmx = 2835;    /* Bits x resolution per meter*/
     uint32_t bpmy = 2835;    /* Bits y resolution per meter*/
     uint32_t colors = 0;     /* Color palette*/
@@ -151,13 +151,13 @@ int main(int argc, char **argv)
     {
         runtimeError(-5, argv[3]);
     }
-    //      std::cout << "Input path: " << argv[2] << "\n";
-    //      std::cout << "Output path: " << argv[3] << "\n";
+    std::cout << "Input path: " << argv[2] << "\n";
+    std::cout << "Output path: " << argv[3] << "\n";
 
     while ((ent_dir_in = readdir(dir_in)) != NULL)
     {
         if (!S_ISDIR(statbuff.st_mode)) //Check it is a Dir file
-        {
+        {                               //bmp.image = result;
             extension = strchr(ent_dir_in->d_name, '.');
 
             if (extension && (strcmp(extension, ".bmp") == 0)) //Check BMP extension
@@ -220,7 +220,6 @@ int main(int argc, char **argv)
                             }
                             time.operationTime = endTime - startTime;
                         }
-                        //bmp.image = result;
 
                         //Copy file
                         dest_path = arrangePath(argv[3], ent_dir_in->d_name);
@@ -235,10 +234,9 @@ int main(int argc, char **argv)
                         time.writeTime = endTime - startTime;
 
                         float totalTime = time.readingTime.count() + time.operationTime.count() + time.writeTime.count();
-                        //                      std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
-                        std::cout << totalTime << "\n";
-                        //                        displayTime(time, argv[1]);
-                        //lsdisplayBMP(&bmp);
+
+                        std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
+                        displayTime(time, argv[1]);
 
                         free(bmp.image);
                         free(source_path);
@@ -262,27 +260,15 @@ int readBMP(FILE *f, bmp *bmp)
         fclose(f);
         bmp->image = NULL;
     }
-    //fread(bFileHeader, BMP_FILE_HEADER, 1, f); //Read file's header
 
-    //fseek(f, 0, SEEK_SET);
     if (fread(&bmp->fileHeader.type, sizeof(uint16_t), 1, f) != 1) // Read image data, in other words, imgsize bytes
         return -1;
-    //std::cout << "type " << (char)bFileHeader->type << "\n";
-
-    //fseek(f, 2, SEEK_SET);
     if (fread(&bmp->fileHeader.size, sizeof(uint32_t), 1, f) != 1) // Read image data, in other words, imgsize bytes
         return -1;
-    //std::cout << "size " << bFileHeader->size << "\n";
-
-    //fseek(f, 6, SEEK_SET);
     if (fread(&bmp->fileHeader.resv, sizeof(uint32_t), 1, f) != 1) // Read image data, in other words, imgsize bytes
         return -1;
-    //std::cout << "resv " << bFileHeader->resv << "\n";
-
-    //fseek(f, 10, SEEK_SET);
     if (fread(&bmp->fileHeader.offset, sizeof(uint32_t), 1, f) != 1) // Read image data, in other words, imgsize bytes
         return -1;
-    //std::cout << "OFFSET " << bFileHeader->offset << "\n";
 
     if (bmp->fileHeader.type != 0x4D42) /* Check correct format */
     {
@@ -295,15 +281,6 @@ int readBMP(FILE *f, bmp *bmp)
         return -1;
     if (fread(&bmp->infoHeader.compress, sizeof(uint32_t), 6, f) != 6) //Read bmp's header
         return -1;
-
-    //fseek(f, BMP_FILE_HEADER, SEEK_SET);
-    //if (fread(&bmp->infoHeader, BMP_INFO_HEADER, 1, f) != 1) //Read bmp's header
-    //    return -1;
-    //char *imgdata;                                  /* Img data */
-    //imgdata = (char *)malloc(bInfoHeader->imgsize); //Allocate memory (imgsize)
-
-    //fseek(f, bFileHeader->offset, SEEK_SET);    //Set filedescriptor to the beginning of the image data (bmp file header offset)
-    //fread(imgdata, bInfoHeader->imgsize, 1, f); // Read image data, in other words, imgsize bytes*/
 
     int bytesPerPixel = ((int)bmp->infoHeader.bpp) / 8;
     int unpaddedRowSize = (bmp->infoHeader.width) * (bytesPerPixel);
