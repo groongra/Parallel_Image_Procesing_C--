@@ -429,7 +429,7 @@ int sobelMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint3
             }
         }
     }
-    return (abs(sumSobelX) / sobelWeight) + (abs(sumSobelY) / sobelWeight);
+    return (abs(sumSobelX) + abs(sumSobelY)) / sobelWeight;
 }
 
 int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)

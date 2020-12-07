@@ -4,5 +4,5 @@
 
     for i in {1..20}
     do
-        ./bin/image-seq copy src dest
+        ./bin/image-par sobel src dest
     done

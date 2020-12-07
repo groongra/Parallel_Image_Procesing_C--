@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <math.h>
 #include <chrono>
+#include <omp.h>
 
 #define DEBUG 0
 #define COPY "copy"
@@ -21,7 +22,6 @@
 #define BMP_FILE_HEADER 14 /* headerSize*/
 #define BMP_INFO_HEADER 40 /* headerSize*/
 #define TIME_UNIT std::chrono::duration<float, std::micro>
-#define OMP_NUM_THREADS 6
 
 typedef struct timeMetrics
 {
@@ -415,15 +415,15 @@ char *arrangePath(char *destination_path, char *destination_name)
 unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width, int height, const char *blurOperation)
 {
     int row, col, k, color, j, i, sum;
-    //#pragma omp parallel for num_threads(OMP_NUM_THREADS) private(row, col, k, j, i, color) shared(sum) schedule(dynamic)
-    //#pragma omp parallel for num_threads(OMP_NUM_THREADS)
+
+#pragma omp parallel for private(row, col, k, j, i, color)
     for (row = 0; row < height; row++) //Rows
     {
         for (col = 0; col < width; col++) //Cols
         {
             for (k = 0; k < 3; k++) //RGB Colors
             {
-                sum = 0;
+                sum = 0; //gaussMask
 
                 for (j = -2; j <= 2; j++)
                 {
@@ -443,13 +443,15 @@ unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width,
     if (strcmp(blurOperation, SOBEL) == 0)
     {
         int sumSobelX, sumSobelY, colorX, colorY;
+
+#pragma omp parallel for private(row, col, k, j, i, colorX, colorY, sumSobelX, sumSobelY)
         for (row = 0; row < height; row++) //Rows
         {
             for (col = 0; col < width; col++) //Cols
             {
                 for (k = 0; k < 3; k++) //RGB Colors
                 {
-                    sumSobelX = 0;
+                    sumSobelX = 0; //sobelMask
                     sumSobelY = 0;
 
                     for (j = -1; j <= 1; j++)
@@ -465,7 +467,7 @@ unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width,
                             }
                         }
                     }
-                    arr[3 * row * width + 3 * col + k] = (abs(sumSobelX) / sobelWeight + abs(sumSobelY) / sobelWeight);
+                    arr[3 * row * width + 3 * col + k] = (abs(sumSobelX) + abs(sumSobelY)) / sobelWeight;
                 }
             }
         }
