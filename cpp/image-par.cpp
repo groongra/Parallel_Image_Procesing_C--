@@ -42,7 +42,7 @@ typedef struct bmpFileHeader
 
 typedef struct bmpInfoHeader
 {
-    uint32_t headersize; /* Header size */
+    int headersize;      /* Header size */
     int width;           /* Img width */
     int height;          /* Img height */
     uint16_t planes;     /* Color planes (1) */
@@ -74,7 +74,7 @@ typedef struct defaultBmpFileHeader
 
 typedef struct defaultBmpInfoHeader
 {
-    uint32_t headersize = 40; /* Header size */
+    int headersize = 40; /* Header size */
     /* Img width */
     /* Img height */
     uint16_t planes = 1;   /* Color planes (1) */
@@ -152,8 +152,8 @@ int main(int argc, char **argv)
     {
         runtimeError(-5, argv[3]);
     }
-    std::cout << "Input path: " << argv[2] << "\n";
-    std::cout << "Output path: " << argv[3] << "\n";
+    //    std::cout << "Input path: " << argv[2] << "\n";
+    //    std::cout << "Output path: " << argv[3] << "\n";
 
     while ((ent_dir_in = readdir(dir_in)) != NULL)
     {
@@ -235,9 +235,9 @@ int main(int argc, char **argv)
                         time.writeTime = endTime - startTime;
 
                         float totalTime = time.readingTime.count() + time.operationTime.count() + time.writeTime.count();
-                        std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
-
-                        displayTime(time, argv[1]);
+                        //                        std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
+                        std::cout << totalTime << "\n";
+                        //                        displayTime(time, argv[1]);
                         //lsdisplayBMP(&bmp);
 
                         free(bmp.image);
@@ -289,9 +289,16 @@ int readBMP(FILE *f, bmp *bmp)
         fclose(f);
         bmp->image = NULL;
     }
-    //fseek(f, BMP_FILE_HEADER, SEEK_SET);
-    if (fread(&bmp->infoHeader, BMP_INFO_HEADER, 1, f) != 1) //Read bmp's header
+    if (fread(&bmp->infoHeader, sizeof(int), 3, f) != 3) //Read bmp's header
         return -1;
+    if (fread(&bmp->infoHeader.planes, sizeof(uint16_t), 2, f) != 2) //Read bmp's header
+        return -1;
+    if (fread(&bmp->infoHeader.compress, sizeof(uint32_t), 6, f) != 6) //Read bmp's header
+        return -1;
+
+    //fseek(f, BMP_FILE_HEADER, SEEK_SET);
+    //if (fread(&bmp->infoHeader, BMP_INFO_HEADER, 1, f) != 1) //Read bmp's header
+    //    return -1;
     //char *imgdata;                                  /* Img data */
     //imgdata = (char *)malloc(bInfoHeader->imgsize); //Allocate memory (imgsize)
 
@@ -363,13 +370,13 @@ int writeBMP(bmp *bmp, char *copyPath)
             return -1; //  8B
         if (fwrite(&defaultHeader.headersize, sizeof(u_int32_t), 1, fdDest) != 1)
             return -1; //  4B
-        if (fwrite(&bmp->infoHeader.width, sizeof(u_int32_t), 2, fdDest) != 2)
+        if (fwrite(&bmp->infoHeader.width, sizeof(int), 2, fdDest) != 2)
             return -1; //  8B
         if (fwrite(&defaultHeader.planes, sizeof(u_int16_t), 2, fdDest) != 2)
             return -1; //  8B
         if (fwrite(&defaultHeader.compress, sizeof(u_int32_t), 1, fdDest) != 1)
             return -1; //  4B
-        if (fwrite(&bmp->infoHeader.imgsize, sizeof(u_int16_t), 1, fdDest) != 1)
+        if (fwrite(&bmp->infoHeader.imgsize, sizeof(u_int32_t), 1, fdDest) != 1)
             return -1; //  4B
         if (fwrite(&defaultHeader.bpmx, sizeof(u_int32_t), 4, fdDest) != 4)
             return -1; //  12B
@@ -405,48 +412,9 @@ char *arrangePath(char *destination_path, char *destination_name)
     return path;
 }
 
-int sobelMask(unsigned char *arr, int col, int row, int k, int width, int height)
-{
-    int sumSobelX = 0, sumSobelY = 0;
-    uint32_t colorX, colorY;
-    for (int j = -1; j <= 1; j++)
-    {
-        for (int i = -1; i <= 1; i++)
-        {
-            if ((row + j) >= 0 && (row + j) < (int)height && (col + i) >= 0 && (col + i) < (int)width)
-            {
-                colorX = arr[(row + j) * 3 * (int)width + (col + i) * 3 + k];
-                sumSobelX += colorX * sobelX[i + 1][j + 1];
-                colorY = arr[(row + j) * 3 * (int)width + (col + i) * 3 + k];
-                sumSobelY += colorY * sobelY[i + 1][j + 1];
-            }
-        }
-    }
-    return (abs(sumSobelX) / sobelWeight) + (abs(sumSobelY) / sobelWeight);
-}
-
-/*int gaussMask(unsigned char *arr, int col, int row, int k, uint32_t width, uint32_t height)
-{
-    int sum = 0;
-
-    for (int j = -2; j <= 2; j++)
-    {
-        for (int i = -2; i <= 2; i++)
-        {
-            if ((row + j) >= 0 && (row + j) < (int)height && (col + i) >= 0 && (col + i) < (int)width)
-            {
-                uint32_t color = arr[(row + j) * 3 * (int)width + (col + i) * 3 + k];
-                sum += color * gauss[i + 2][j + 2];
-            }
-        }
-    }
-    return sum / gaussWeight;
-}*/
-
 unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width, int height, const char *blurOperation)
 {
-    int row, col, k, color;
-    int j, i, sum;
+    int row, col, k, color, j, i, sum;
     //#pragma omp parallel for num_threads(OMP_NUM_THREADS) private(row, col, k, j, i, color) shared(sum) schedule(dynamic)
     //#pragma omp parallel for num_threads(OMP_NUM_THREADS)
     for (row = 0; row < height; row++) //Rows
@@ -474,13 +442,30 @@ unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width,
     }
     if (strcmp(blurOperation, SOBEL) == 0)
     {
+        int sumSobelX, sumSobelY, colorX, colorY;
         for (row = 0; row < height; row++) //Rows
         {
             for (col = 0; col < width; col++) //Cols
             {
                 for (k = 0; k < 3; k++) //RGB Colors
                 {
-                    arr[3 * row * width + 3 * col + k] = sobelMask(result, col, row, k, width, height);
+                    sumSobelX = 0;
+                    sumSobelY = 0;
+
+                    for (j = -1; j <= 1; j++)
+                    {
+                        for (i = -1; i <= 1; i++)
+                        {
+                            if ((row + j) >= 0 && (row + j) < (int)height && (col + i) >= 0 && (col + i) < (int)width)
+                            {
+                                colorX = result[(row + j) * 3 * (int)width + (col + i) * 3 + k];
+                                sumSobelX += colorX * sobelX[i + 1][j + 1];
+                                colorY = result[(row + j) * 3 * (int)width + (col + i) * 3 + k];
+                                sumSobelY += colorY * sobelY[i + 1][j + 1];
+                            }
+                        }
+                    }
+                    arr[3 * row * width + 3 * col + k] = (abs(sumSobelX) / sobelWeight + abs(sumSobelY) / sobelWeight);
                 }
             }
         }

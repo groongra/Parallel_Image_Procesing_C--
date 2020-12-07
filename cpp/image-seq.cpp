@@ -41,9 +41,9 @@ typedef struct bmpFileHeader
 
 typedef struct bmpInfoHeader
 {
-    uint32_t headersize; /* Header size */
-    uint32_t width;      /* Img width */
-    uint32_t height;     /* Img height */
+    int headersize;      /* Header size */
+    int width;           /* Img width */
+    int height;          /* Img height */
     uint16_t planes;     /* Color planes (1) */
     uint16_t bpp;        /* Bits per pixel */
     uint32_t compress;   /* Compresion */
@@ -73,7 +73,7 @@ typedef struct defaultBmpFileHeader
 
 typedef struct defaultBmpInfoHeader
 {
-    uint32_t headersize = 40; /* Header size */
+    int headersize = 40; /* Header size */
     /* Img width */
     /* Img height */
     uint16_t planes = 1;   /* Color planes (1) */
@@ -237,6 +237,7 @@ int main(int argc, char **argv)
                         float totalTime = time.readingTime.count() + time.operationTime.count() + time.writeTime.count();
                         //                      std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
                         std::cout << totalTime << "\n";
+                        //                        displayTime(time, argv[1]);
                         //lsdisplayBMP(&bmp);
 
                         free(bmp.image);
@@ -288,9 +289,16 @@ int readBMP(FILE *f, bmp *bmp)
         fclose(f);
         bmp->image = NULL;
     }
-    //fseek(f, BMP_FILE_HEADER, SEEK_SET);
-    if (fread(&bmp->infoHeader, BMP_INFO_HEADER, 1, f) != 1) //Read bmp's header
+    if (fread(&bmp->infoHeader, sizeof(int), 3, f) != 3) //Read bmp's header
         return -1;
+    if (fread(&bmp->infoHeader.planes, sizeof(uint16_t), 2, f) != 2) //Read bmp's header
+        return -1;
+    if (fread(&bmp->infoHeader.compress, sizeof(uint32_t), 6, f) != 6) //Read bmp's header
+        return -1;
+
+    //fseek(f, BMP_FILE_HEADER, SEEK_SET);
+    //if (fread(&bmp->infoHeader, BMP_INFO_HEADER, 1, f) != 1) //Read bmp's header
+    //    return -1;
     //char *imgdata;                                  /* Img data */
     //imgdata = (char *)malloc(bInfoHeader->imgsize); //Allocate memory (imgsize)
 
@@ -310,7 +318,7 @@ int readBMP(FILE *f, bmp *bmp)
 
     bmp->image = (unsigned char *)malloc(totalSize);
     unsigned char *currentRowPointer = bmp->image + ((bmp->infoHeader.height - 1) * unpaddedRowSize);
-    for (uint32_t i = 0; i < bmp->infoHeader.height; i++)
+    for (int i = 0; i < bmp->infoHeader.height; i++)
     {
         fseek(f, bmp->fileHeader.offset + (i * paddedRowSize), SEEK_SET);
         if (fread(currentRowPointer, 1, unpaddedRowSize, f) != size_t_cast_unpaddedRowSize)
@@ -362,13 +370,13 @@ int writeBMP(bmp *bmp, char *copyPath)
             return -1; //  8B
         if (fwrite(&defaultHeader.headersize, sizeof(u_int32_t), 1, fdDest) != 1)
             return -1; //  4B
-        if (fwrite(&bmp->infoHeader.width, sizeof(u_int32_t), 2, fdDest) != 2)
+        if (fwrite(&bmp->infoHeader.width, sizeof(int), 2, fdDest) != 2)
             return -1; //  8B
         if (fwrite(&defaultHeader.planes, sizeof(u_int16_t), 2, fdDest) != 2)
             return -1; //  8B
         if (fwrite(&defaultHeader.compress, sizeof(u_int32_t), 1, fdDest) != 1)
             return -1; //  4B
-        if (fwrite(&bmp->infoHeader.imgsize, sizeof(u_int16_t), 1, fdDest) != 1)
+        if (fwrite(&bmp->infoHeader.imgsize, sizeof(u_int32_t), 1, fdDest) != 1)
             return -1; //  4B
         if (fwrite(&defaultHeader.bpmx, sizeof(u_int32_t), 4, fdDest) != 4)
             return -1; //  12B
@@ -383,7 +391,7 @@ int writeBMP(bmp *bmp, char *copyPath)
         if (DEBUG)
             std::cout << "\t| (padded|unpadded) ::" << paddedRowSize << " | " << unpaddedRowSize << "-> padding:" << padding << "\n";
 
-        for (uint32_t i = 0; i < bmp->infoHeader.height; i++)
+        for (int i = 0; i < bmp->infoHeader.height; i++)
         {
             int pixelOffset = ((bmp->infoHeader.height - i) - 1) * unpaddedRowSize;
             fwrite(&bmp->image[pixelOffset], 1, paddedRowSize, fdDest);
