@@ -26,7 +26,8 @@
 typedef struct timeMetrics
 {
     TIME_UNIT readingTime;
-    TIME_UNIT operationTime;
+    TIME_UNIT gaussTime;
+    TIME_UNIT sobelTime;
     TIME_UNIT writeTime;
 
 } timeMetrics;
@@ -118,7 +119,7 @@ void runtimeError(int errorCode, std::string elem);
 int checkBMPHeader(bmpInfoHeader *bInfoHeader);
 int readBMP(FILE *f, bmp *bmp);
 int writeBMP(bmp *bmp, char *copyPath);
-unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width, int height, const char *blurOperation);
+unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width, int height, const char *blurOperation, timeMetrics *time);
 
 ////////////////////MAIN////////////////////
 
@@ -195,7 +196,8 @@ int main(int argc, char **argv)
                         if (copy)
                         {
                             result = bmp.image;
-                            time.operationTime = TIME_UNIT::zero();
+                            time.gaussTime = TIME_UNIT::zero();
+                            time.sobelTime = TIME_UNIT::zero();
                         }
                         else
                         {
@@ -206,17 +208,13 @@ int main(int argc, char **argv)
 
                             if (gauss)
                             {
-                                startTime = std::chrono::high_resolution_clock::now();
-                                bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, GAUSS);
-                                endTime = std::chrono::high_resolution_clock::now();
+
+                                bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, GAUSS, &time);
                             }
                             else //sobel
                             {
-                                startTime = std::chrono::high_resolution_clock::now();
-                                bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, SOBEL);
-                                endTime = std::chrono::high_resolution_clock::now();
+                                bmp.image = applyFilter(bmp.image, result, bmp.infoHeader.width, bmp.infoHeader.height, SOBEL, &time);
                             }
-                            time.operationTime = endTime - startTime;
                         }
 
                         //Copy file
@@ -231,7 +229,7 @@ int main(int argc, char **argv)
                         endTime = std::chrono::high_resolution_clock::now();
                         time.writeTime = endTime - startTime;
 
-                        float totalTime = time.readingTime.count() + time.operationTime.count() + time.writeTime.count();
+                        float totalTime = time.readingTime.count() + time.gaussTime.count() + time.sobelTime.count() + time.writeTime.count();
                         std::cout << "File:  \"" << source_path << "\"(time: " << totalTime << ")\n";
                         displayTime(time, argv[1]);
 
@@ -385,10 +383,10 @@ char *arrangePath(char *destination_path, char *destination_name)
     return path;
 }
 
-unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width, int height, const char *blurOperation)
+unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width, int height, const char *blurOperation, timeMetrics *time)
 {
     int row, col, k, color, j, i, sum;
-
+    auto startTime = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for private(row, col, k, j, i, color)
     for (row = 0; row < height; row++) //Rows
     {
@@ -413,10 +411,12 @@ unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width,
             }
         }
     }
+    auto endTime = std::chrono::high_resolution_clock::now();
+    time->gaussTime = endTime - startTime;
     if (strcmp(blurOperation, SOBEL) == 0)
     {
         int sumSobelX, sumSobelY, colorX, colorY;
-
+        auto startTime = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for private(row, col, k, j, i, colorX, colorY, sumSobelX, sumSobelY)
         for (row = 0; row < height; row++) //Rows
         {
@@ -445,6 +445,8 @@ unsigned char *applyFilter(unsigned char *arr, unsigned char *result, int width,
             }
         }
         result = arr;
+        auto endTime = std::chrono::high_resolution_clock::now();
+        time->sobelTime = endTime - startTime;
     }
     return result;
 }
@@ -480,10 +482,15 @@ void displayBMPFile(bmpFileHeader *info)
 
 void displayTime(timeMetrics time, char *operation)
 {
-    std::cout << "\tLoad time: " << time.readingTime.count() << "\n";
-    if (strcmp(operation, COPY) != 0)
-        std::cout << "\t" << operation << " time: " << time.operationTime.count() << "\n";
-    std::cout << "\tStore time: " << time.writeTime.count() << "\n";
+    std::cout << "  Load time: " << time.readingTime.count() << "\n";
+    if (strcmp(operation, GAUSS) == 0)
+        std::cout << "  " << operation << " time: " << time.gaussTime.count() << "\n";
+    else if (strcmp(operation, SOBEL) == 0)
+    {
+        std::cout << "  " << GAUSS << " time: " << time.gaussTime.count() << "\n";
+        std::cout << "  " << operation << " time: " << time.sobelTime.count() << "\n";
+    }
+    std::cout << "  Store time: " << time.writeTime.count() << "\n";
 }
 
 void runtimeError(int errorCode, std::string elem)
